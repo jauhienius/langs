@@ -48,6 +48,10 @@ function entry_render(entry: Entry) {
         entry.source_language === language.code ? element("td", { className: "source", textContent: entry.word }) : element("td", { textContent: entry.meanings[language.code].join(", ") });
         line.append(cell);
     }
+    const delete_button = element("button", { className: "delete", textContent: "×", title: "Delete", type: "button" });
+    delete_button.dataset.entry = entry.ID;
+    delete_button.setAttribute("aria-label", `Delete "${entry.word}"`);
+    line.lastElementChild!.append(delete_button);
     return line;
 }
 
@@ -74,11 +78,22 @@ function table_screen_render() {
     const message = element("td", { colSpan: LANGUAGES.length, className: "message" });
     const message_line = element("tr", { className: "message-line" }, [message]);
     const entries = element("tbody", { className: "entries" });
+    entries.onclick = event => {
+        const delete_button = (event.target as HTMLElement).closest<HTMLButtonElement>("button.delete");
+        if (!delete_button) return;
+        table.entry_delete(delete_button.dataset.entry!);
+        undo_button.focus();
+    };
+    const undo_text = element("span");
+    const undo_button = element("button", { type: "button", textContent: "Undo", onclick: () => table.undo() });
+    const undo_bar = element("div", { className: "undo-bar", hidden: true }, [undo_text, undo_button]);
+    undo_bar.setAttribute("role", "status");
 
     const header = element("tr", {}, LANGUAGES.map(language => element("th", { textContent: language.name })));
     root.replaceChildren(
         element("div", { className: "toolbar" }, [element("button", { className: "settings", textContent: "⚙", title: "Gemini API key", onclick: key_screen_render })]),
         element("table", { className: "table" }, [element("thead", {}, [header]), element("tbody", {}, [word_line, message_line]), entries]),
+        undo_bar,
     );
 
     let entries_rendered: Entry[] | null = null;
@@ -91,6 +106,8 @@ function table_screen_render() {
         }
         message.textContent = state.message ?? "";
         message_line.hidden = state.message === null;
+        undo_text.textContent = state.deletion === null ? "" : `"${state.deletion.entry.word}" deleted`;
+        undo_bar.hidden = state.deletion === null;
         // The History is drawn again only when it changes, not on each key press.
         if (state.entries === entries_rendered) return;
         entries.replaceChildren(...state.entries.map(entry_render));

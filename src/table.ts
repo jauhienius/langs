@@ -9,11 +9,18 @@ export type Entry = {
     meanings: Meanings;
 };
 
+// How long Undo stays available after a delete.
+export const UNDO_DURATION_MS = 5000;
+
+// The last deleted Entry, the ID of the Entry that was below it (null: it was the last one) and its index as a fallback.
+export type Deletion = { entry: Entry; ID_next: string | null; index: number };
+
 export type TableState = {
     entries: Entry[];
     words: Record<LanguageCode, string>;
     translations_pending: Record<LanguageCode, boolean>;
     message: string | null;
+    deletion: Deletion | null;
 };
 
 type TableListener = (state: TableState) => void;
@@ -60,8 +67,9 @@ const meanings_empty = (meanings: Meanings) => LANGUAGES.every(language => meani
 export class Table {
     state: TableState;
     private listeners: TableListener[] = [];
+    private undo_timer: ReturnType<typeof setTimeout> | undefined;
 
-    constructor(private translator: Translator, private storage: HistoryStorage) { this.state = { entries: storage.load(), words: language_record(() => ""), translations_pending: language_record(() => false), message: null }; }
+    constructor(private translator: Translator, private storage: HistoryStorage) { this.state = { entries: storage.load(), words: language_record(() => ""), translations_pending: language_record(() => false), message: null, deletion: null }; }
 
     // Returns a function that removes the listener.
     subscribe(listener: TableListener) {
@@ -70,6 +78,28 @@ export class Table {
     }
 
     history_reload() { this.state_set({ entries: this.storage.load() }); }
+
+    // Deletes at once; Undo stays available for UNDO_DURATION_MS, and a second delete makes the first one final.
+    entry_delete(ID: string) {
+        const index = this.state.entries.findIndex(entry => entry.ID === ID);
+        if (index < 0) return;
+        const entries = this.state.entries.filter(entry => entry.ID !== ID);
+        const deletion: Deletion = { entry: this.state.entries[index], ID_next: this.state.entries[index + 1]?.ID ?? null, index };
+        clearTimeout(this.undo_timer);
+        this.undo_timer = setTimeout(() => this.state_set({ deletion: null }), UNDO_DURATION_MS);
+        this.state_set({ entries, deletion, message: this.history_save(entries) ?? this.state.message });
+    }
+
+    undo() {
+        const deletion = this.state.deletion;
+        if (deletion === null) return;
+        clearTimeout(this.undo_timer);
+        if (this.state.entries.some(entry => entry.ID === deletion.entry.ID)) return this.state_set({ deletion: null });
+        const index_next = this.state.entries.findIndex(entry => entry.ID === deletion.ID_next);
+        const index = index_next < 0 ? Math.min(deletion.index, this.state.entries.length) : index_next;
+        const entries = [...this.state.entries.slice(0, index), deletion.entry, ...this.state.entries.slice(index)];
+        this.state_set({ entries, deletion: null, message: this.history_save(entries) ?? this.state.message });
+    }
 
     word_set(language: LanguageCode, word: string) {
         this.state_set({ words: { ...this.state.words, [language]: word } });

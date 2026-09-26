@@ -8,6 +8,10 @@
   --gutter: 16px;
   --focus-width: 2px;
   --spinner-size: 14px;
+  --tap-size: 36px;
+  --padding-inline: 14px;
+  --font-size-icon: 1.2rem;
+  --bar-width: 480px;
   --color-muted: #71717a;
   --color-warning: #b45309;
   --space: 8px;
@@ -93,7 +97,7 @@ body {
 
 button {
   font: inherit;
-  padding: var(--space) 14px;
+  padding: var(--space) var(--padding-inline);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   background: var(--color-header);
@@ -103,7 +107,7 @@ button {
 
 .settings {
   padding: 4px 10px;
-  font-size: 1.2rem;
+  font-size: var(--font-size-icon);
 }
 
 .key-screen {
@@ -177,4 +181,57 @@ button {
 
 .entries td.source {
   font-weight: var(--font-weight-strong);
+}
+
+.entries td:last-child {
+  position: relative;
+  padding-right: var(--tap-size);
+}
+
+.entries .delete {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: var(--tap-size);
+  height: var(--tap-size);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-muted);
+  font-size: var(--font-size-icon);
+  line-height: 1;
+}
+
+.undo-bar {
+  position: fixed;
+  left: var(--gutter);
+  right: var(--gutter);
+  bottom: var(--gutter);
+  max-width: var(--bar-width);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space);
+  padding: var(--space) var(--space) var(--space) var(--padding-inline);
+  border-radius: var(--radius);
+  background: var(--color-text);
+  color: var(--color-background);
+}
+
+/* Room under the History, so the Undo bar never covers the last Entry. */
+body:has(.undo-bar:not([hidden])) {
+  padding-bottom: calc(var(--tap-size) + var(--gutter) * 2);
+}
+
+.undo-bar[hidden] {
+  display: none;
+}
+
+.undo-bar button {
+  border: 0;
+  background: none;
+  color: inherit;
+  font-weight: var(--font-weight-strong);
+  text-decoration: underline;
 }

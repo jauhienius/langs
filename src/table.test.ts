@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { Table, entry_valid, type Entry, type HistoryStorage } from "./table";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { Table, UNDO_DURATION_MS, entry_valid, type Entry, type HistoryStorage } from "./table";
 import type { Translator, TranslatorError, TranslatorOutcome } from "./translator";
 
 // Fake Translator: answers with a scripted outcome and records each call.
@@ -21,6 +21,7 @@ function history_storage_fake(entries_initial: Entry[] = []) {
     return storage;
 }
 
+const ENTRY_TIME = "2026-09-27T10:00:00.000Z";
 const RETRY_SECONDS = 31;
 const HTTP_NOT_FOUND = 404;
 
@@ -247,7 +248,7 @@ describe("Table", () => {
     });
 
     it("accepts only Entries with the full shape", () => {
-        const entry: Entry = { ID: "a", created_at: "2026-09-27T10:00:00.000Z", source_language: "pl", word: "dom", meanings: { be: ["дом"], pl: [], en: ["house"], ru: ["дом"] } };
+        const entry: Entry = { ID: "a", created_at: ENTRY_TIME, source_language: "pl", word: "dom", meanings: { be: ["дом"], pl: [], en: ["house"], ru: ["дом"] } };
 
         expect(entry_valid(entry)).toBe(true);
         expect(entry_valid({ ...entry, meanings: undefined })).toBe(false);
@@ -255,5 +256,118 @@ describe("Table", () => {
         expect(entry_valid({ ...entry, meanings: { ...entry.meanings, en: "house" } })).toBe(false);
         expect(entry_valid({ ...entry, created_at: "yesterday" })).toBe(false);
         expect(entry_valid(null)).toBe(false);
+    });
+});
+
+// Three stored Entries, newest first: "a" (top), "b", "c".
+function entries_abc(): Entry[] {
+    const entry = (word: string): Entry => ({ ID: word, created_at: ENTRY_TIME, source_language: "pl", word, meanings: { be: ["x"], pl: [], en: ["x"], ru: ["x"] } });
+    return [entry("a"), entry("b"), entry("c")];
+}
+
+describe("Table: delete and Undo", () => {
+    afterEach(() => { vi.useRealTimers(); });
+
+    it("removes the Entry from the History and from storage at once", () => {
+        const storage = history_storage_fake(entries_abc());
+        const table = new Table(translator_fake(TRANSLATION_DOM).translator, storage);
+
+        table.entry_delete("b");
+
+        expect(table.state.entries.map(entry => entry.word)).toEqual(["a", "c"]);
+        expect(storage.load().map(entry => entry.word)).toEqual(["a", "c"]);
+        expect(table.state.deletion?.entry.word).toBe("b");
+    });
+
+    it("puts the Entry back at its original position with Undo, also in storage", () => {
+        const storage = history_storage_fake(entries_abc());
+        const table = new Table(translator_fake(TRANSLATION_DOM).translator, storage);
+
+        table.entry_delete("b");
+        table.undo();
+
+        expect(table.state.entries.map(entry => entry.word)).toEqual(["a", "b", "c"]);
+        expect(storage.load().map(entry => entry.word)).toEqual(["a", "b", "c"]);
+        expect(table.state.deletion).toBeNull();
+    });
+
+    it("keeps the original position when a new Entry was added during the Undo time", async () => {
+        const table = new Table(translator_fake(TRANSLATION_DOM).translator, history_storage_fake(entries_abc()));
+
+        table.entry_delete("b");
+        table.word_set("pl", "dom");
+        await table.submit("pl");
+        table.undo();
+
+        expect(table.state.entries.map(entry => entry.word)).toEqual(["dom", "a", "b", "c"]);
+    });
+
+    it("makes the delete final when the Undo time ends", () => {
+        vi.useFakeTimers();
+        const table = new Table(translator_fake(TRANSLATION_DOM).translator, history_storage_fake(entries_abc()));
+
+        table.entry_delete("b");
+        vi.advanceTimersByTime(UNDO_DURATION_MS);
+        table.undo();
+
+        expect(table.state.deletion).toBeNull();
+        expect(table.state.entries.map(entry => entry.word)).toEqual(["a", "c"]);
+    });
+
+    it("makes the first delete final when a second delete comes during the Undo time", () => {
+        vi.useFakeTimers();
+        const table = new Table(translator_fake(TRANSLATION_DOM).translator, history_storage_fake(entries_abc()));
+
+        table.entry_delete("a");
+        table.entry_delete("c");
+        table.undo();
+
+        expect(table.state.entries.map(entry => entry.word)).toEqual(["b", "c"]);
+        vi.advanceTimersByTime(UNDO_DURATION_MS);
+        expect(table.state.deletion).toBeNull();
+    });
+
+    it("uses the original position when the Entry below was removed in another tab", () => {
+        const storage = history_storage_fake(entries_abc());
+        const table = new Table(translator_fake(TRANSLATION_DOM).translator, storage);
+
+        table.entry_delete("b");
+        storage.save(storage.load().filter(entry => entry.ID !== "c"));
+        table.history_reload();
+        table.undo();
+
+        expect(table.state.entries.map(entry => entry.word)).toEqual(["a", "b"]);
+    });
+
+    it("does not add the Entry a second time when another tab already has it again", () => {
+        const storage = history_storage_fake(entries_abc());
+        const table = new Table(translator_fake(TRANSLATION_DOM).translator, storage);
+
+        table.entry_delete("b");
+        storage.save(entries_abc());
+        table.history_reload();
+        table.undo();
+
+        expect(table.state.entries.map(entry => entry.word)).toEqual(["a", "b", "c"]);
+        expect(table.state.deletion).toBeNull();
+    });
+
+    it("keeps the message on screen after a delete", async () => {
+        const table = new Table(translator_fake({ kind: "mismatch" }).translator, history_storage_fake(entries_abc()));
+
+        table.word_set("en", "dom");
+        await table.submit("en");
+        table.entry_delete("b");
+
+        expect(table.state.message).toBe('"dom" is not English');
+    });
+
+    it("reports a delete that could not be saved", () => {
+        const storage: HistoryStorage = { load: entries_abc, save: () => { throw new Error("QuotaExceededError"); } };
+        const table = new Table(translator_fake(TRANSLATION_DOM).translator, storage);
+
+        table.entry_delete("b");
+
+        expect(table.state.message).toBe("The History could not be saved on this device – use Export to keep it");
     });
 });
