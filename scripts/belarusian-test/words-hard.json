@@ -1,0 +1,82 @@
+[
+  {
+    "language": "be",
+    "word": "замок",
+    "note": "BE замок = lock, замак = castle"
+  },
+  {
+    "language": "pl",
+    "word": "zamek",
+    "note": "homonym castle/lock/zipper"
+  },
+  {
+    "language": "pl",
+    "word": "uroda",
+    "note": "false friend: beauty (RU урод = freak)"
+  },
+  {
+    "language": "pl",
+    "word": "sklep",
+    "note": "false friend: shop (RU склеп = crypt)"
+  },
+  {
+    "language": "pl",
+    "word": "czerstwy",
+    "note": "stale (bread) / hale"
+  },
+  {
+    "language": "en",
+    "word": "spring",
+    "note": "homonym season/coil/source"
+  },
+  {
+    "language": "en",
+    "word": "make up",
+    "note": "phrasal verb, many senses"
+  },
+  {
+    "language": "en",
+    "word": "give up",
+    "note": "phrasal verb"
+  },
+  {
+    "language": "en",
+    "word": "cozy",
+    "note": "BE утульны"
+  },
+  {
+    "language": "en",
+    "word": "break a leg",
+    "note": "idiom"
+  },
+  {
+    "language": "en",
+    "word": "pies",
+    "note": "valid EN (plural of pie); must NOT be mismatch"
+  },
+  {
+    "language": "ru",
+    "word": "коса",
+    "note": "homonym braid/scythe/spit"
+  },
+  {
+    "language": "ru",
+    "word": "врач",
+    "note": "BE доктар/лекар"
+  },
+  {
+    "language": "ru",
+    "word": "клубника",
+    "note": "PL truskawka"
+  },
+  {
+    "language": "ru",
+    "word": "пожалуйста",
+    "note": "BE калі ласка"
+  },
+  {
+    "language": "en",
+    "word": "dom",
+    "note": "MISMATCH expected (PL/RU)"
+  }
+]
