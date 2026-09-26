@@ -18,6 +18,12 @@ export type TableState = {
 
 type TableListener = (state: TableState) => void;
 
+// Where the History lives between sessions (ADR-0002); Entries are stored newest first.
+export interface HistoryStorage {
+    load(): Entry[];
+    save(entries: Entry[]): void;
+}
+
 // Cleans a provider answer: trimmed, no empty items, no duplicates, at most MEANINGS_MAX, nothing for the Source Language.
 function meanings_clean(meanings: Meanings, source_language: LanguageCode): Meanings {
     const list_clean = (code: LanguageCode) => code === source_language ? [] : [...new Set(meanings[code].map(m /*meaning*/ => m.trim()).filter(m => m !== ""))].slice(0, MEANINGS_MAX);
@@ -36,20 +42,34 @@ function error_message(error: TranslatorError) {
     }
 }
 
+const language_codes: readonly string[] = LANGUAGES.map(language => language.code);
+const strings_valid = (value: unknown) => Array.isArray(value) && value.every(item => typeof item === "string");
+
+// Checks the shape of an Entry that comes from outside the app (stored History, Import file).
+export function entry_valid(value: unknown): value is Entry {
+    const entry = value as Entry;
+    if (typeof value !== "object" || value === null) return false;
+    if (typeof entry.ID !== "string" || typeof entry.word !== "string" || Number.isNaN(Date.parse(entry.created_at))) return false;
+    if (!language_codes.includes(entry.source_language) || typeof entry.meanings !== "object" || entry.meanings === null) return false;
+    return LANGUAGES.every(language => strings_valid(entry.meanings[language.code]));
+}
+
 const meanings_empty = (meanings: Meanings) => LANGUAGES.every(language => meanings[language.code].length === 0);
 
 // The core: the History and the input line, independent of the UI and of the provider.
 export class Table {
-    state: TableState = { entries: [], words: language_record(() => ""), translations_pending: language_record(() => false), message: null };
+    state: TableState;
     private listeners: TableListener[] = [];
 
-    constructor(private translator: Translator) {}
+    constructor(private translator: Translator, private storage: HistoryStorage) { this.state = { entries: storage.load(), words: language_record(() => ""), translations_pending: language_record(() => false), message: null }; }
 
     // Returns a function that removes the listener.
     subscribe(listener: TableListener) {
         this.listeners.push(listener);
         return () => { this.listeners = this.listeners.filter(l /*listener*/ => l !== listener); };
     }
+
+    history_reload() { this.state_set({ entries: this.storage.load() }); }
 
     word_set(language: LanguageCode, word: string) {
         this.state_set({ words: { ...this.state.words, [language]: word } });
@@ -66,7 +86,14 @@ export class Table {
         const meanings = meanings_clean(outcome.meanings, language);
         if (meanings_empty(meanings)) return this.state_set({ translations_pending, message: `No translation found for "${word}"` });
         const entry: Entry = { ID: crypto.randomUUID(), created_at: new Date().toISOString(), source_language: language, word, meanings };
-        this.state_set({ entries: [entry, ...this.state.entries], words: { ...this.state.words, [language]: "" }, translations_pending, message: null });
+        const entries = [entry, ...this.state.entries];
+        this.state_set({ entries, words: { ...this.state.words, [language]: "" }, translations_pending, message: this.history_save(entries) });
+    }
+
+    // Returns a message when the History could not be saved, else null.
+    private history_save(entries: Entry[]) {
+        try { this.storage.save(entries); return null; }
+        catch { return "The History could not be saved on this device – use Export to keep it"; }
     }
 
     private state_set(state_change: Partial<TableState>) {

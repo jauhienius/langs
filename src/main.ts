@@ -1,4 +1,5 @@
 import "./style.css";
+import { HISTORY_STORAGE_NAME, HistoryLocalStorage } from "./history_storage";
 import { LANGUAGES, type LanguageCode } from "./language";
 import { SettingsStorage } from "./settings";
 import { Table, type Entry, type TableState } from "./table";
@@ -50,8 +51,11 @@ function entry_render(entry: Entry) {
     return line;
 }
 
-const table = new Table(new TranslatorGemini(() => SettingsStorage.key_get() ?? ""));
+const table = new Table(new TranslatorGemini(() => SettingsStorage.key_get() ?? ""), HistoryLocalStorage);
 let table_unsubscribe = () => {};
+
+// Another tab changed the History: load it again, so this tab does not overwrite it.
+window.addEventListener("storage", event => { if (event.key === HISTORY_STORAGE_NAME) table.history_reload(); });
 
 // Table screen: the four columns, the input line, the message line and the History.
 function table_screen_render() {
@@ -77,6 +81,7 @@ function table_screen_render() {
         element("table", { className: "table" }, [element("thead", {}, [header]), element("tbody", {}, [word_line, message_line]), entries]),
     );
 
+    let entries_rendered: Entry[] | null = null;
     const state_render = (state: TableState) => {
         for (const language of LANGUAGES) {
             const input = inputs[language.code];
@@ -86,7 +91,10 @@ function table_screen_render() {
         }
         message.textContent = state.message ?? "";
         message_line.hidden = state.message === null;
+        // The History is drawn again only when it changes, not on each key press.
+        if (state.entries === entries_rendered) return;
         entries.replaceChildren(...state.entries.map(entry_render));
+        entries_rendered = state.entries;
     };
     table_unsubscribe = table.subscribe(state_render);
     state_render(table.state);

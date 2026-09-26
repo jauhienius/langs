@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Table } from "./table";
+import { Table, entry_valid, type Entry, type HistoryStorage } from "./table";
 import type { Translator, TranslatorError, TranslatorOutcome } from "./translator";
 
 // Fake Translator: answers with a scripted outcome and records each call.
@@ -14,6 +14,13 @@ function translator_fake(outcome: TranslatorOutcome) {
     return { translator, calls };
 }
 
+// In-memory History storage: survives a new Table like localStorage survives a reload.
+function history_storage_fake(entries_initial: Entry[] = []) {
+    let entries = entries_initial;
+    const storage: HistoryStorage = { load: () => entries, save: entries_new => { entries = entries_new; } };
+    return storage;
+}
+
 const RETRY_SECONDS = 31;
 const HTTP_NOT_FOUND = 404;
 
@@ -22,7 +29,7 @@ const TRANSLATION_DOM: TranslatorOutcome = { kind: "translation", meanings: { be
 describe("Table", () => {
     it("adds an Entry with the Word and its translations at the top after a successful translation", async () => {
         const { translator } = translator_fake(TRANSLATION_DOM);
-        const table = new Table(translator);
+        const table = new Table(translator, history_storage_fake());
 
         table.word_set("pl", "dom");
         await table.submit("pl");
@@ -37,7 +44,7 @@ describe("Table", () => {
 
     it("clears the input cell after a successful translation and puts the newest Entry first", async () => {
         const { translator } = translator_fake(TRANSLATION_DOM);
-        const table = new Table(translator);
+        const table = new Table(translator, history_storage_fake());
 
         table.word_set("pl", "dom");
         await table.submit("pl");
@@ -50,7 +57,7 @@ describe("Table", () => {
 
     it("reports a Language Mismatch with a message, adds no Entry and keeps the Word in its cell", async () => {
         const { translator } = translator_fake({ kind: "mismatch" });
-        const table = new Table(translator);
+        const table = new Table(translator, history_storage_fake());
 
         table.word_set("en", "dom");
         await table.submit("en");
@@ -62,7 +69,7 @@ describe("Table", () => {
 
     it("removes the message after the next successful translation", async () => {
         const outcomes: TranslatorOutcome[] = [{ kind: "mismatch" }, TRANSLATION_DOM];
-        const table = new Table({ translate: async () => outcomes.shift()! });
+        const table = new Table({ translate: async () => outcomes.shift()! }, history_storage_fake());
 
         table.word_set("en", "dom");
         await table.submit("en");
@@ -74,7 +81,7 @@ describe("Table", () => {
 
     it("sends the Word without leading and trailing spaces", async () => {
         const { translator, calls } = translator_fake(TRANSLATION_DOM);
-        const table = new Table(translator);
+        const table = new Table(translator, history_storage_fake());
 
         table.word_set("pl", "  dzień dobry ");
         await table.submit("pl");
@@ -85,7 +92,7 @@ describe("Table", () => {
 
     it("does nothing when the cell is empty or has only spaces", async () => {
         const { translator, calls } = translator_fake(TRANSLATION_DOM);
-        const table = new Table(translator);
+        const table = new Table(translator, history_storage_fake());
 
         await table.submit("en");
         table.word_set("en", "   ");
@@ -97,7 +104,7 @@ describe("Table", () => {
 
     it("marks the cell as pending while the translation runs and tells listeners about each change", async () => {
         let answer: (outcome: TranslatorOutcome) => void = () => {};
-        const table = new Table({ translate: () => new Promise(resolve => { answer = resolve; }) });
+        const table = new Table({ translate: () => new Promise(resolve => { answer = resolve; }) }, history_storage_fake());
         const translations_pending_log: boolean[] = [];
         table.subscribe(state => translations_pending_log.push(state.translations_pending.pl));
 
@@ -115,7 +122,7 @@ describe("Table", () => {
     it("keeps at most three different Meanings per cell and nothing in the Source Language cell", async () => {
         const meanings = { be: ["каса", " каса ", "", "каса"], pl: ["kosa", "warkocz", "mierzeja", "kosa", "szczotka"], en: ["scythe"], ru: ["коса"] };
         const { translator } = translator_fake({ kind: "translation", meanings });
-        const table = new Table(translator);
+        const table = new Table(translator, history_storage_fake());
 
         table.word_set("ru", "коса");
         await table.submit("ru");
@@ -125,7 +132,7 @@ describe("Table", () => {
 
     it("adds no Entry and keeps the Word when the translation has no Meaning in any Language", async () => {
         const { translator } = translator_fake({ kind: "translation", meanings: { be: [], pl: ["dom"], en: [" "], ru: [] } });
-        const table = new Table(translator);
+        const table = new Table(translator, history_storage_fake());
 
         table.word_set("pl", "dom");
         await table.submit("pl");
@@ -146,7 +153,7 @@ describe("Table", () => {
         ["a rejected request", { type: "request_rejected", status: HTTP_NOT_FOUND }, `The request was rejected (HTTP ${HTTP_NOT_FOUND}) – trying again will not help`],
     ])("reports %s with its message, adds no Entry and keeps the Word", async (_, error, message) => {
         const { translator } = translator_fake({ kind: "error", error });
-        const table = new Table(translator);
+        const table = new Table(translator, history_storage_fake());
 
         table.word_set("pl", "dom");
         await table.submit("pl");
@@ -160,7 +167,7 @@ describe("Table", () => {
     it("does not send the same cell again while its translation is pending", async () => {
         let answer: (outcome: TranslatorOutcome) => void = () => {};
         let calls = 0;
-        const table = new Table({ translate: () => { calls++; return new Promise(resolve => { answer = resolve; }); } });
+        const table = new Table({ translate: () => { calls++; return new Promise(resolve => { answer = resolve; }); } }, history_storage_fake());
 
         table.word_set("pl", "dom");
         const submission = table.submit("pl");
@@ -170,5 +177,83 @@ describe("Table", () => {
 
         expect(calls).toBe(1);
         expect(table.state.entries).toHaveLength(1);
+    });
+
+    it("keeps the History after a reload, newest first", async () => {
+        const { translator } = translator_fake(TRANSLATION_DOM);
+        const storage = history_storage_fake();
+        const table = new Table(translator, storage);
+
+        table.word_set("pl", "dom");
+        await table.submit("pl");
+        table.word_set("ru", "дом");
+        await table.submit("ru");
+        const table_reloaded = new Table(translator, storage);
+
+        expect(table_reloaded.state.entries.map(entry => entry.word)).toEqual(["дом", "dom"]);
+        expect(table_reloaded.state.entries).toEqual(table.state.entries);
+    });
+
+    it("adds a new Entry when the same Word is translated again", async () => {
+        const { translator } = translator_fake(TRANSLATION_DOM);
+        const table = new Table(translator, history_storage_fake());
+
+        table.word_set("pl", "dom");
+        await table.submit("pl");
+        table.word_set("pl", "dom");
+        await table.submit("pl");
+
+        expect(table.state.entries.map(entry => entry.word)).toEqual(["dom", "dom"]);
+        expect(new Set(table.state.entries.map(entry => entry.ID)).size).toBe(table.state.entries.length);
+    });
+
+    it("records when each Entry was added", async () => {
+        const { translator } = translator_fake(TRANSLATION_DOM);
+        const table = new Table(translator, history_storage_fake());
+        const time_before = Date.now();
+
+        table.word_set("pl", "dom");
+        await table.submit("pl");
+
+        const created_at = Date.parse(table.state.entries[0].created_at);
+        expect(created_at).toBeGreaterThanOrEqual(time_before);
+        expect(created_at).toBeLessThanOrEqual(Date.now());
+    });
+
+    it("keeps the new Entry on screen and reports it when the History cannot be saved", async () => {
+        const { translator } = translator_fake(TRANSLATION_DOM);
+        const storage: HistoryStorage = { load: () => [], save: () => { throw new Error("QuotaExceededError"); } };
+        const table = new Table(translator, storage);
+
+        table.word_set("pl", "dom");
+        await table.submit("pl");
+
+        expect(table.state.entries.map(entry => entry.word)).toEqual(["dom"]);
+        expect(table.state.message).toBe("The History could not be saved on this device – use Export to keep it");
+        expect(table.state.translations_pending.pl).toBe(false);
+    });
+
+    it("loads the History again when it was changed outside this Table (another tab)", async () => {
+        const { translator } = translator_fake(TRANSLATION_DOM);
+        const storage = history_storage_fake();
+        const table = new Table(translator, storage);
+        const table_other = new Table(translator, storage);
+
+        table_other.word_set("pl", "dom");
+        await table_other.submit("pl");
+        table.history_reload();
+
+        expect(table.state.entries).toEqual(table_other.state.entries);
+    });
+
+    it("accepts only Entries with the full shape", () => {
+        const entry: Entry = { ID: "a", created_at: "2026-09-27T10:00:00.000Z", source_language: "pl", word: "dom", meanings: { be: ["дом"], pl: [], en: ["house"], ru: ["дом"] } };
+
+        expect(entry_valid(entry)).toBe(true);
+        expect(entry_valid({ ...entry, meanings: undefined })).toBe(false);
+        expect(entry_valid({ ...entry, source_language: "de" })).toBe(false);
+        expect(entry_valid({ ...entry, meanings: { ...entry.meanings, en: "house" } })).toBe(false);
+        expect(entry_valid({ ...entry, created_at: "yesterday" })).toBe(false);
+        expect(entry_valid(null)).toBe(false);
     });
 });
