@@ -4,17 +4,17 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Core module with an injected Translator interface: `(Word, Source Language) → Translation | Language Mismatch | Error`
-- [ ] Gemini Translator calls the native `generateContent` endpoint of `gemini-3.8-flash` from the browser, key in the `x-goog-api-key` header, temperature 0, JSON response schema, prompt exactly as in the spec
-- [ ] Gemini Translator trims each list to 3 items and removes duplicates
-- [ ] Model ID defined in one place
-- [ ] Settings: key stored in localStorage; first-start screen shows only the key field; "⚙" changes or removes the key
-- [ ] Enter (and the phone keyboard enter/go key) submits; empty or whitespace-only input does nothing; the Word is trimmed
-- [ ] Spinner in the cell while pending; input cell cleared after a successful Entry
-- [ ] New Entry appears at the top, Word in its Source Language column
-- [ ] Language Mismatch: message under the input line, no Entry, Word kept in its cell
-- [ ] UI text in English
-- [ ] Core tests (Vitest, fake Translator): success adds Entry at top; Language Mismatch adds nothing and keeps the Word; trimming and empty input
-- [ ] Visual check through Playwright at phone and desktop width, including one real translation
+- [x] Core module with an injected Translator interface: `(Word, Source Language) → Translation | Language Mismatch | Error`
+- [x] Gemini Translator calls the native `generateContent` endpoint of `gemini-3.8-flash` from the browser, key in the `x-goog-api-key` header, temperature 0, JSON response schema, prompt exactly as in the spec
+- [x] Each list trimmed to 3 items with duplicates removed (done in the core for every provider; see spec)
+- [x] Model ID defined in one place
+- [x] Settings: key stored in localStorage; first-start screen shows only the key field; "⚙" changes or removes the key
+- [x] Enter (and the phone keyboard enter/go key) submits; empty or whitespace-only input does nothing; the Word is trimmed
+- [x] Spinner in the cell while pending; input cell cleared after a successful Entry
+- [x] New Entry appears at the top, Word in its Source Language column
+- [x] Language Mismatch: message under the input line, no Entry, Word kept in its cell
+- [x] UI text in English
+- [x] Core tests (Vitest, fake Translator): success adds Entry at top; Language Mismatch adds nothing and keeps the Word; trimming and empty input
+- [x] Visual check through Playwright at phone and desktop width, including one real translation

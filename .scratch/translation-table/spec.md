@@ -117,7 +117,7 @@ The app has no backend. It calls Gemini directly from the browser with my own AP
 
 ### Data shapes
 
-- **Entry**: `ID` (random unique string), `created_at` (ISO timestamp), `source_language` (`be` | `pl` | `en` | `ru`), `word` (as typed, trimmed), and translations for the other three Languages, each a list of 1–3 strings (Meanings).
+- **Entry**: `ID` (random unique string), `created_at` (ISO timestamp), `source_language` (`be` | `pl` | `en` | `ru`), `word` (as typed, trimmed), and `meanings`: one list per Language with 0–3 strings (Meanings); the Source Language list is always empty. An answer with no Meaning in any Language creates no Entry (message "No translation found").
 - **Export file**: JSON object with a format marker and version, plus the list of Entries. No settings, no key. Import validates the marker, version and Entry shape before merging.
 
 ### Gemini prompt contract (from the Belarusian test prototype)
@@ -136,7 +136,7 @@ Rules for every translation:
 ```
 
 User message: `Source language: <Language name>\nInput: <Word>`.
-Response schema: `{ mismatch: boolean, be: string[], pl: string[], en: string[], ru: string[] }`, all required. The Gemini Translator must also defensively trim each list to 3 items and remove duplicates.
+Response schema: `{ mismatch: boolean, be: string[], pl: string[], en: string[], ru: string[] }`, all required. The core (not the provider) defensively trims each list, removes empty items and duplicates, keeps at most 3, and empties the Source Language list, so this works for any provider.
 
 ## Testing Decisions
 
