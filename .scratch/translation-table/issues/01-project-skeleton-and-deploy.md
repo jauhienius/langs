@@ -4,14 +4,14 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** ready-for-human (only the GitHub repository step is left)
 
-- [ ] Git repository initialised; `.gitignore` excludes `.env.local`, `node_modules` and build output
-- [ ] Vite + vanilla TypeScript project builds with no errors; no UI framework
-- [ ] `vite-plugin-pwa` installed and wired (full manifest/icons come in ticket 07)
-- [ ] Vitest runs (one trivial passing test is enough)
-- [ ] Page shows the four Language columns in the order Belarusian, Polish, English, Russian, with one empty input cell per column at the top
-- [ ] Layout works at phone width (no horizontal page scroll) and at desktop width
-- [ ] GitHub Action builds and deploys to GitHub Pages on push to the default branch; base path matches the Pages URL
+- [x] Git repository initialised; `.gitignore` excludes `.env.local`, `node_modules` and build output
+- [x] Vite + vanilla TypeScript project builds with no errors; no UI framework
+- [x] `vite-plugin-pwa` installed and wired (full manifest/icons come in ticket 07)
+- [x] Vitest runs (one trivial passing test is enough)
+- [x] Page shows the four Language columns in the order Belarusian, Polish, English, Russian, with one empty input cell per column at the top
+- [x] Layout works at phone width (no horizontal page scroll) and at desktop width
+- [x] GitHub Action builds and deploys to GitHub Pages on push to the default branch; base path matches the Pages URL
 - [ ] Human step: the user creates the public GitHub repository and enables Pages (source: GitHub Actions)
-- [ ] Visual check through Playwright at phone and desktop width
+- [x] Visual check through Playwright at phone and desktop width
