@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Table } from "./table";
-import type { Translator, TranslatorOutcome } from "./translator";
+import type { Translator, TranslatorError, TranslatorOutcome } from "./translator";
 
 // Fake Translator: answers with a scripted outcome and records each call.
 function translator_fake(outcome: TranslatorOutcome) {
@@ -13,6 +13,9 @@ function translator_fake(outcome: TranslatorOutcome) {
     };
     return { translator, calls };
 }
+
+const RETRY_SECONDS = 31;
+const HTTP_NOT_FOUND = 404;
 
 const TRANSLATION_DOM: TranslatorOutcome = { kind: "translation", meanings: { be: ["дом"], pl: [], en: ["house", "home"], ru: ["дом"] } };
 
@@ -130,5 +133,42 @@ describe("Table", () => {
         expect(table.state.entries).toEqual([]);
         expect(table.state.message).toBe('No translation found for "dom"');
         expect(table.state.words.pl).toBe("dom");
+    });
+
+    it.each<[string, TranslatorError, string]>([
+        ["an invalid key", { type: "key_invalid" }, "The API key was rejected – check it in ⚙"],
+        ["the per-minute limit with a wait time", { type: "limit_minute", retry_seconds: RETRY_SECONDS }, `Limit per minute reached – try again in ${RETRY_SECONDS} s`],
+        ["the per-minute limit without a wait time", { type: "limit_minute", retry_seconds: null }, "Limit per minute reached – try again in a minute"],
+        ["the daily limit", { type: "limit_day" }, "Daily limit reached – try again tomorrow"],
+        ["a busy provider", { type: "busy" }, "The translation service is busy – try again"],
+        ["a network error", { type: "network" }, "Network error – check the connection and try again"],
+        ["a bad response", { type: "response_bad" }, "The answer had an unknown format – try again"],
+        ["a rejected request", { type: "request_rejected", status: HTTP_NOT_FOUND }, `The request was rejected (HTTP ${HTTP_NOT_FOUND}) – trying again will not help`],
+    ])("reports %s with its message, adds no Entry and keeps the Word", async (_, error, message) => {
+        const { translator } = translator_fake({ kind: "error", error });
+        const table = new Table(translator);
+
+        table.word_set("pl", "dom");
+        await table.submit("pl");
+
+        expect(table.state.message).toBe(message);
+        expect(table.state.entries).toEqual([]);
+        expect(table.state.words.pl).toBe("dom");
+        expect(table.state.translations_pending.pl).toBe(false);
+    });
+
+    it("does not send the same cell again while its translation is pending", async () => {
+        let answer: (outcome: TranslatorOutcome) => void = () => {};
+        let calls = 0;
+        const table = new Table({ translate: () => { calls++; return new Promise(resolve => { answer = resolve; }); } });
+
+        table.word_set("pl", "dom");
+        const submission = table.submit("pl");
+        await table.submit("pl");
+        answer(TRANSLATION_DOM);
+        await submission;
+
+        expect(calls).toBe(1);
+        expect(table.state.entries).toHaveLength(1);
     });
 });

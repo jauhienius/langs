@@ -4,13 +4,17 @@
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Translator Error outcomes: invalid key, per-minute limit (with retry-after seconds when the API gives them), daily limit, provider busy, network/offline, malformed response
-- [ ] Gemini Translator maps HTTP 429 to per-minute vs daily limit using the quota information in the error body (not hard-coded limit values); 503 maps to busy; key errors map to invalid key
-- [ ] A distinct, short English message for each Error type; the invalid-key message points to "⚙"
-- [ ] The Word stays in its cell after any Error
-- [ ] Submitting the same cell again while pending does nothing
-- [ ] No automatic retry, no fallback provider
-- [ ] Core tests (fake Translator) for each Error type and for the double-submit block
-- [ ] Visual check through Playwright of at least one error message (e.g. with an invalid key)
+- [x] Translator Error outcomes: invalid key, per-minute limit (with retry-after seconds when the API gives them), daily limit, provider busy, network/offline, malformed response
+- [x] Gemini Translator maps HTTP 429 to per-minute vs daily limit using the quota information in the error body (not hard-coded limit values); 503 maps to busy; key errors map to invalid key
+- [x] A distinct, short English message for each Error type; the invalid-key message points to "⚙"
+- [x] The Word stays in its cell after any Error
+- [x] Submitting the same cell again while pending does nothing
+- [x] No automatic retry, no fallback provider
+- [x] Core tests (fake Translator) for each Error type and for the double-submit block
+- [x] Visual check through Playwright of at least one error message (e.g. with an invalid key)
+
+## Comments
+
+- Implementation: all 5xx map to "busy" (not only 503); other rejected statuses (e.g. 404 bad model, 400 not a key error) get their own type `request_rejected` with the HTTP status. Messages are provider-neutral so the core stays independent of Gemini (ADR-0001). The 429 per-minute/daily split and the retry time were not exercised live (quota).
