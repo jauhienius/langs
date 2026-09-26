@@ -1,0 +1,72 @@
+:root {
+  --color-background: #ffffff;
+  --color-text: #1b1b1f;
+  --color-border: #d4d4d8;
+  --color-header: #f4f4f5;
+  --color-input: #ffffff;
+  --color-focus: #2563eb;
+  --gutter: 16px;
+  --focus-width: 2px;
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background: #18181b;
+    --color-text: #f4f4f5;
+    --color-border: #3f3f46;
+    --color-header: #27272a;
+    --color-input: #1f1f23;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: var(--gutter);
+  background: var(--color-background);
+  color: var(--color-text);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.table th,
+.table td {
+  border: 1px solid var(--color-border);
+  padding: 0;
+  overflow-wrap: anywhere;
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  background: var(--color-header);
+  padding: 8px 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: left;
+}
+
+.word-line input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  padding: 10px 6px;
+  font: inherit;
+  font-size: 16px; /* 16px prevents iOS zoom on focus */
+  background: var(--color-input);
+  color: inherit;
+}
+
+.word-line input:focus {
+  outline: var(--focus-width) solid var(--color-focus);
+  outline-offset: calc(-1 * var(--focus-width));
+}
