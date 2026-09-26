@@ -2,7 +2,7 @@ import "./style.css";
 import { HISTORY_STORAGE_NAME, HistoryLocalStorage } from "./history_storage";
 import { LANGUAGES, type LanguageCode } from "./language";
 import { SettingsStorage } from "./settings";
-import { Table, type Entry, type TableState } from "./table";
+import { EXPORT_FORMAT, Table, type Entry, type TableState } from "./table";
 import { TranslatorGemini } from "./translator_gemini";
 
 const root = document.getElementById("app")!;
@@ -55,6 +55,20 @@ function entry_render(entry: Entry) {
     return line;
 }
 
+const JSON_TYPE = "application/json";
+// Some browsers cancel a download when its URL is released at once.
+const DOWNLOAD_URL_LIFETIME_MS = 10000;
+
+// Local date as YYYY-MM-DD (the "sv" locale writes dates in ISO order).
+const date_local = () => new Date().toLocaleDateString("sv");
+
+// Saves the History as a file named with today's date, e.g. "langs-history-2026-09-27.json".
+function history_download() {
+    const link = element("a", { href: URL.createObjectURL(new Blob([table.history_export()], { type: JSON_TYPE })), download: `${EXPORT_FORMAT}-${date_local()}.json` });
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), DOWNLOAD_URL_LIFETIME_MS);
+}
+
 const table = new Table(new TranslatorGemini(() => SettingsStorage.key_get() ?? ""), HistoryLocalStorage);
 let table_unsubscribe = () => {};
 
@@ -84,6 +98,13 @@ function table_screen_render() {
         table.entry_delete(delete_button.dataset.entry!);
         undo_button.focus();
     };
+    const import_input = element("input", { type: "file", accept: `${JSON_TYPE},.json`, hidden: true });
+    import_input.onchange = async () => {
+        const file = import_input.files?.[0];
+        // A file that cannot be read is handled like a file that is not an Export.
+        if (file) table.history_import(await file.text().catch(() => ""));
+        import_input.value = "";
+    };
     const undo_text = element("span");
     const undo_button = element("button", { type: "button", textContent: "Undo", onclick: () => table.undo() });
     const undo_bar = element("div", { className: "undo-bar", hidden: true }, [undo_text, undo_button]);
@@ -91,7 +112,12 @@ function table_screen_render() {
 
     const header = element("tr", {}, LANGUAGES.map(language => element("th", { textContent: language.name })));
     root.replaceChildren(
-        element("div", { className: "toolbar" }, [element("button", { className: "settings", textContent: "⚙", title: "Gemini API key", onclick: key_screen_render })]),
+        element("div", { className: "toolbar" }, [
+            element("button", { type: "button", textContent: "Export", onclick: history_download }),
+            element("button", { type: "button", textContent: "Import", onclick: () => import_input.click() }),
+            import_input,
+            element("button", { className: "settings", textContent: "⚙", title: "Gemini API key", onclick: key_screen_render }),
+        ]),
         element("table", { className: "table" }, [element("thead", {}, [header]), element("tbody", {}, [word_line, message_line]), entries]),
         undo_bar,
     );

@@ -1,4 +1,5 @@
 import { LANGUAGES, language_name, language_record, type LanguageCode } from "./language";
+import { json_parse } from "./json";
 import { MEANINGS_MAX, type Meanings, type Translator, type TranslatorError } from "./translator";
 
 export type Entry = {
@@ -61,6 +62,20 @@ export function entry_valid(value: unknown): value is Entry {
     return LANGUAGES.every(language => strings_valid(entry.meanings[language.code]));
 }
 
+// Export file (ADR-0002): a format marker, a version and the Entries; never settings or the API key.
+export const EXPORT_FORMAT = "langs-history";
+const EXPORT_VERSION = 1;
+const EXPORT_INDENT = 2;
+
+type ExportFile = { format: string; version: number; entries: Entry[] };
+
+function export_file_valid(value: unknown): value is ExportFile {
+    const file = value as ExportFile | null;
+    return file?.format === EXPORT_FORMAT && file.version === EXPORT_VERSION && Array.isArray(file.entries) && file.entries.every(entry_valid);
+}
+
+const entries_sort = (entries: Entry[]) => [...entries].sort((a /*entry*/, b /*entry*/) => Date.parse(b.created_at) - Date.parse(a.created_at));
+
 const meanings_empty = (meanings: Meanings) => LANGUAGES.every(language => meanings[language.code].length === 0);
 
 // The core: the History and the input line, independent of the UI and of the provider.
@@ -99,6 +114,25 @@ export class Table {
         const index = index_next < 0 ? Math.min(deletion.index, this.state.entries.length) : index_next;
         const entries = [...this.state.entries.slice(0, index), deletion.entry, ...this.state.entries.slice(index)];
         this.state_set({ entries, deletion: null, message: this.history_save(entries) ?? this.state.message });
+    }
+
+    history_export() { return JSON.stringify({ format: EXPORT_FORMAT, version: EXPORT_VERSION, entries: this.state.entries } satisfies ExportFile, null, EXPORT_INDENT); }
+
+    // Merges an Export file by Entry ID: an ID already on this device keeps the local Entry. A file that is not valid changes nothing.
+    history_import(text: string) {
+        const file = json_parse(text);
+        if (!export_file_valid(file)) return this.state_set({ message: "This file is not a Langs History export – nothing was changed" });
+        const IDs = new Set(this.state.entries.map(entry => entry.ID));
+        const entries_new: Entry[] = [];
+        for (const entry of file.entries) {
+            if (IDs.has(entry.ID)) continue;
+            IDs.add(entry.ID);
+            entries_new.push(entry);
+        }
+        const count_text = `Imported ${entries_new.length} new ${entries_new.length === 1 ? "Entry" : "Entries"}`;
+        if (entries_new.length === 0) return this.state_set({ message: count_text });
+        const entries = entries_sort([...this.state.entries, ...entries_new]);
+        this.state_set({ entries, message: this.history_save(entries) ?? count_text });
     }
 
     word_set(language: LanguageCode, word: string) {

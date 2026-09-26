@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { SettingsStorage } from "./settings";
 import { Table, UNDO_DURATION_MS, entry_valid, type Entry, type HistoryStorage } from "./table";
 import type { Translator, TranslatorError, TranslatorOutcome } from "./translator";
 
@@ -22,6 +23,7 @@ function history_storage_fake(entries_initial: Entry[] = []) {
 }
 
 const ENTRY_TIME = "2026-09-27T10:00:00.000Z";
+const VERSION_UNKNOWN = 99;
 const RETRY_SECONDS = 31;
 const HTTP_NOT_FOUND = 404;
 
@@ -369,5 +371,106 @@ describe("Table: delete and Undo", () => {
         table.entry_delete("b");
 
         expect(table.state.message).toBe("The History could not be saved on this device – use Export to keep it");
+    });
+});
+
+// Entries with different times, newest first: "new" (top), "mid", "old".
+function entries_timed(): Entry[] {
+    const entry = (word: string, created_at: string): Entry => ({ ID: word, created_at, source_language: "pl", word, meanings: { be: ["x"], pl: [], en: ["x"], ru: ["x"] } });
+    return [entry("new", "2026-09-27T12:00:00.000Z"), entry("mid", "2026-09-27T11:00:00.000Z"), entry("old", "2026-09-27T10:00:00.000Z")];
+}
+
+describe("Table: Export and Import", () => {
+    const table_new = (entries: Entry[] = []) => new Table(translator_fake(TRANSLATION_DOM).translator, history_storage_fake(entries));
+
+    it("exports only a format marker, a version and the Entries", () => {
+        const file = JSON.parse(table_new(entries_timed()).history_export());
+
+        expect(Object.keys(file).sort()).toEqual(["entries", "format", "version"]);
+        expect(file.entries).toEqual(entries_timed());
+    });
+
+    it("never puts the API key into the Export file", () => {
+        const values = new Map<string, string>();
+        vi.stubGlobal("localStorage", { getItem: (name: string) => values.get(name) ?? null, setItem: (name: string, value: string) => values.set(name, value), removeItem: (name: string) => values.delete(name) });
+        SettingsStorage.key_set("AIza-secret-key");
+
+        const text = table_new(entries_timed()).history_export();
+
+        expect(SettingsStorage.key_get()).toBe("AIza-secret-key");
+        expect(text).not.toContain("AIza-secret-key");
+        vi.unstubAllGlobals();
+    });
+
+    it("keeps the Entry on this device when the file has the same ID with other content", () => {
+        const [entry_new] = entries_timed();
+        const text = table_new([{ ...entry_new, word: "changed" }]).history_export();
+        const table = table_new([entry_new]);
+
+        table.history_import(text);
+
+        expect(table.state.entries).toEqual([entry_new]);
+    });
+
+    it("does not change the order or save when the file has no new Entry", () => {
+        const [entry_new, entry_mid] = entries_timed();
+        let saves = 0;
+        const storage: HistoryStorage = { load: () => [entry_mid, entry_new], save: () => { saves++; } };
+        const table = new Table(translator_fake(TRANSLATION_DOM).translator, storage);
+
+        table.history_import(table.history_export());
+
+        expect(table.state.entries).toEqual([entry_mid, entry_new]);
+        expect(saves).toBe(0);
+    });
+
+    it("restores the whole History from an Export on an empty device", () => {
+        const text = table_new(entries_timed()).history_export();
+        const storage = history_storage_fake();
+        const table = new Table(translator_fake(TRANSLATION_DOM).translator, storage);
+
+        table.history_import(text);
+
+        expect(table.state.entries).toEqual(entries_timed());
+        expect(storage.load()).toEqual(entries_timed());
+        expect(table.state.message).toBe("Imported 3 new Entries");
+    });
+
+    it("merges by Entry ID and sorts all Entries newest first", () => {
+        const [entry_new, entry_mid, entry_old] = entries_timed();
+        const text = table_new([entry_new, entry_old]).history_export();
+        const table = table_new([entry_mid, entry_old]);
+
+        table.history_import(text);
+
+        expect(table.state.entries.map(entry => entry.word)).toEqual(["new", "mid", "old"]);
+        expect(table.state.message).toBe("Imported 1 new Entry");
+    });
+
+    it("changes nothing when the same file is imported again", () => {
+        const text = table_new(entries_timed()).history_export();
+        const table = table_new();
+
+        table.history_import(text);
+        table.history_import(text);
+
+        expect(table.state.entries).toEqual(entries_timed());
+        expect(table.state.message).toBe("Imported 0 new Entries");
+    });
+
+    it.each([
+        ["text that is not JSON", "not json"],
+        ["another format", JSON.stringify({ format: "other", version: 1, entries: [] })],
+        ["another version", JSON.stringify({ format: "langs-history", version: VERSION_UNKNOWN, entries: [] })],
+        ["a bad Entry", JSON.stringify({ format: "langs-history", version: 1, entries: [{ ID: "x" }] })],
+    ])("rejects %s with a message and keeps the History", (_, text) => {
+        const storage = history_storage_fake(entries_timed());
+        const table = new Table(translator_fake(TRANSLATION_DOM).translator, storage);
+
+        table.history_import(text);
+
+        expect(table.state.message).toBe("This file is not a Langs History export – nothing was changed");
+        expect(table.state.entries).toEqual(entries_timed());
+        expect(storage.load()).toEqual(entries_timed());
     });
 });

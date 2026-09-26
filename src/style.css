@@ -92,6 +92,7 @@ body {
 .toolbar {
   display: flex;
   justify-content: flex-end;
+  gap: var(--space);
   margin-bottom: var(--space);
 }
 
