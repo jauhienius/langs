@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#2563eb"/> <!-- 5ce3ff5a09a1: theme colour, also in vite.config.ts, index.html and style.css -->
+  <g fill="none" stroke="#ffffff" stroke-width="20" opacity="0.9">
+    <rect x="96" y="136" width="320" height="240" rx="20"/>
+    <line x1="176" y1="136" x2="176" y2="376"/>
+    <line x1="256" y1="136" x2="256" y2="376"/>
+    <line x1="336" y1="136" x2="336" y2="376"/>
+    <line x1="96" y1="216" x2="416" y2="216"/>
+  </g>
+</svg>

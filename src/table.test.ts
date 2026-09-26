@@ -474,3 +474,35 @@ describe("Table: Export and Import", () => {
         expect(storage.load()).toEqual(entries_timed());
     });
 });
+
+describe("Table: offline", () => {
+    it("sends nothing while offline and keeps the Word in its cell", async () => {
+        const { translator, calls } = translator_fake(TRANSLATION_DOM);
+        const table = new Table(translator, history_storage_fake());
+
+        table.network_set("offline");
+        table.word_set("pl", "dom");
+        await table.submit("pl");
+
+        expect(calls).toEqual([]);
+        expect(table.state.network).toBe("offline");
+        expect(table.state.words.pl).toBe("dom");
+        expect(table.state.translations_pending.pl).toBe(false);
+    });
+
+    it("queues nothing while offline and sends again when the network returns", async () => {
+        const { translator, calls } = translator_fake(TRANSLATION_DOM);
+        const table = new Table(translator, history_storage_fake());
+
+        table.network_set("offline");
+        table.word_set("pl", "dom");
+        await table.submit("pl");
+        table.network_set("online");
+        expect(calls).toEqual([]);
+
+        await table.submit("pl");
+
+        expect(calls).toHaveLength(1);
+        expect(table.state.entries).toHaveLength(1);
+    });
+});

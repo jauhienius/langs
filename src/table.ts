@@ -22,7 +22,10 @@ export type TableState = {
     translations_pending: Record<LanguageCode, boolean>;
     message: string | null;
     deletion: Deletion | null;
+    network: Network;
 };
+
+export type Network = "online" | "offline";
 
 type TableListener = (state: TableState) => void;
 
@@ -84,13 +87,16 @@ export class Table {
     private listeners: TableListener[] = [];
     private undo_timer: ReturnType<typeof setTimeout> | undefined;
 
-    constructor(private translator: Translator, private storage: HistoryStorage) { this.state = { entries: storage.load(), words: language_record(() => ""), translations_pending: language_record(() => false), message: null, deletion: null }; }
+    constructor(private translator: Translator, private storage: HistoryStorage) { this.state = { entries: storage.load(), words: language_record(() => ""), translations_pending: language_record(() => false), message: null, deletion: null, network: "online" }; }
 
     // Returns a function that removes the listener.
     subscribe(listener: TableListener) {
         this.listeners.push(listener);
         return () => { this.listeners = this.listeners.filter(l /*listener*/ => l !== listener); };
     }
+
+    // While offline nothing is sent and nothing is queued (the input line shows "offline").
+    network_set(network: Network) { this.state_set({ network }); }
 
     history_reload() { this.state_set({ entries: this.storage.load() }); }
 
@@ -141,7 +147,7 @@ export class Table {
 
     async submit(language: LanguageCode) {
         const word = this.state.words[language].trim();
-        if (word === "" || this.state.translations_pending[language]) return;
+        if (word === "" || this.state.translations_pending[language] || this.state.network === "offline") return;
         this.state_set({ translations_pending: { ...this.state.translations_pending, [language]: true } });
         const outcome = await this.translator.translate(word, language);
         const translations_pending = { ...this.state.translations_pending, [language]: false };

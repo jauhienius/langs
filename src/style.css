@@ -1,10 +1,10 @@
 :root {
-  --color-background: #ffffff;
+  --color-background: #ffffff; /* 51ed43f19e8a: also BACKGROUND_COLOR in vite.config.ts */
   --color-text: #1b1b1f;
   --color-border: #d4d4d8;
   --color-header: #f4f4f5;
   --color-input: #ffffff;
-  --color-focus: #2563eb;
+  --color-focus: #2563eb; /* 5ce3ff5a09a1: theme colour, also in vite.config.ts, index.html and public/icon.svg */
   --gutter: 16px;
   --focus-width: 2px;
   --spinner-size: 14px;
@@ -157,6 +157,26 @@ button {
   border-top-color: var(--color-focus);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
+}
+
+/* Shows "offline" also in cells that already hold a Word (the placeholder shows only in empty cells). */
+.word-line.offline td::before {
+  content: "offline"; /* 1a7c3e9d2b40: also OFFLINE_TEXT in main.ts */
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 0.65rem;
+  color: var(--color-muted);
+  pointer-events: none;
+}
+
+.word-line.offline input::placeholder {
+  color: transparent;
+}
+
+.word-line input::placeholder {
+  color: var(--color-muted);
+  font-style: italic;
 }
 
 .word-line td.pending input {

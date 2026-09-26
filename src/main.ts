@@ -56,6 +56,7 @@ function entry_render(entry: Entry) {
 }
 
 const JSON_TYPE = "application/json";
+const OFFLINE_TEXT = "offline"; // 1a7c3e9d2b40: also in style.css (.word-line.offline label)
 // Some browsers cancel a download when its URL is released at once.
 const DOWNLOAD_URL_LIFETIME_MS = 10000;
 
@@ -71,6 +72,11 @@ function history_download() {
 
 const table = new Table(new TranslatorGemini(() => SettingsStorage.key_get() ?? ""), HistoryLocalStorage);
 let table_unsubscribe = () => {};
+
+// The network state comes from the browser; while offline nothing is sent.
+const network_get = () => navigator.onLine ? "online" : "offline";
+table.network_set(network_get());
+for (const event_name of ["online", "offline"]) window.addEventListener(event_name, () => table.network_set(network_get()));
 
 // Another tab changed the History: load it again, so this tab does not overwrite it.
 window.addEventListener("storage", event => { if (event.key === HISTORY_STORAGE_NAME) table.history_reload(); });
@@ -124,10 +130,13 @@ function table_screen_render() {
 
     let entries_rendered: Entry[] | null = null;
     const state_render = (state: TableState) => {
+        const offline = state.network === "offline";
+        word_line.classList.toggle("offline", offline);
         for (const language of LANGUAGES) {
             const input = inputs[language.code];
             if (input.value !== state.words[language.code]) input.value = state.words[language.code];
-            input.readOnly = state.translations_pending[language.code];
+            input.readOnly = state.translations_pending[language.code] || offline;
+            input.placeholder = offline ? OFFLINE_TEXT : "";
             input.parentElement!.classList.toggle("pending", state.translations_pending[language.code]);
         }
         message.textContent = state.message ?? "";
