@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-human (only the GitHub repository step is left)
+**Status:** done — live at https://jauhienius.github.io/langs/
 
 - [x] Git repository initialised; `.gitignore` excludes `.env.local`, `node_modules` and build output
 - [x] Vite + vanilla TypeScript project builds with no errors; no UI framework
@@ -13,5 +13,5 @@
 - [x] Page shows the four Language columns in the order Belarusian, Polish, English, Russian, with one empty input cell per column at the top
 - [x] Layout works at phone width (no horizontal page scroll) and at desktop width
 - [x] GitHub Action builds and deploys to GitHub Pages on push to the default branch; base path matches the Pages URL
-- [ ] Human step: the user creates the public GitHub repository and enables Pages (source: GitHub Actions)
+- [x] Human step: the user creates the public GitHub repository and enables Pages (source: GitHub Actions)
 - [x] Visual check through Playwright at phone and desktop width
