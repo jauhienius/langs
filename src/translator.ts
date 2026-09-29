@@ -11,8 +11,10 @@ export type TranslatorError =
     | { type: "key_invalid" }
     | { type: "limit_minute"; retry_seconds: number | null }
     | { type: "limit_day" }
+    | { type: "credit_empty" }
     | { type: "busy" }
     | { type: "network" }
+    | { type: "network_or_key" }
     | { type: "response_bad" }
     | { type: "request_rejected"; status: number };
 

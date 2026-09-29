@@ -1,9 +1,11 @@
 import "./style.css";
 import { HISTORY_STORAGE_NAME, HistoryLocalStorage } from "./history_storage";
 import { LANGUAGES, type LanguageCode } from "./language";
-import { SettingsStorage } from "./settings";
+import { PROVIDERS, SettingsStorage, type ProviderName } from "./settings";
 import { EXPORT_FORMAT, Table, type Entry, type TableState } from "./table";
+import type { Translator } from "./translator";
 import { TranslatorGemini } from "./translator_gemini";
+import { TranslatorOpenAI } from "./translator_openai";
 
 const root = document.getElementById("app")!;
 
@@ -13,18 +15,23 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, properties: Reco
     return node;
 }
 
-// Key screen: first start (no key yet) and "⚙" (change or remove the key).
-function key_screen_render() {
-    const key = SettingsStorage.key_get();
-    const key_input = element("input", { type: "password", value: key ?? "", placeholder: "Gemini API key", autocomplete: "off", spellcheck: false, required: true });
-    key_input.setAttribute("aria-label", "Gemini API key");
-    const key_buttons = key === null ? [] : [
-        element("button", { type: "button", textContent: "Remove key", onclick: () => { SettingsStorage.key_remove(); key_screen_render(); } }),
-        element("button", { type: "button", textContent: "Cancel", onclick: table_screen_render }),
+const key_active_get = () => SettingsStorage.key_get(SettingsStorage.provider_get());
+
+// Key screen: first start (no key yet) and "⚙" (choose the provider, change or remove its key).
+function key_screen_render(provider: ProviderName = SettingsStorage.provider_get()) {
+    const provider_info = PROVIDERS.find(p /*provider*/ => p.name === provider)!;
+    const provider_select = element("select", {}, PROVIDERS.map(p /*provider*/ => element("option", { value: p.name, textContent: p.title, selected: p.name === provider })));
+    provider_select.onchange = () => key_screen_render(provider_select.value as ProviderName);
+    const key = SettingsStorage.key_get(provider);
+    const key_input = element("input", { type: "password", value: key ?? "", placeholder: "API key", autocomplete: "off", spellcheck: false, required: true });
+    const key_buttons = [
+        ...(key === null ? [] : [element("button", { type: "button", textContent: "Remove key", onclick: () => { SettingsStorage.key_remove(provider); key_screen_render(provider); } })]),
+        ...(key_active_get() === null ? [] : [element("button", { type: "button", textContent: "Cancel", onclick: table_screen_render })]),
     ];
     const form = element("form", { className: "key-screen" }, [
-        element("label", {}, ["Gemini API key", key_input]),
-        element("p", { className: "hint" }, ["Stays only in this browser. Get a free key at ", element("a", { href: "https://aistudio.google.com/apikey", target: "_blank", rel: "noopener", textContent: "aistudio.google.com" }), "."]),
+        element("label", {}, ["Provider", provider_select]),
+        element("label", {}, ["API key", key_input]),
+        element("p", { className: "hint" }, ["Stays only in this browser. Get a key at ", element("a", { href: provider_info.key_url, target: "_blank", rel: "noopener", textContent: provider_info.key_site }), "."]),
         element("div", { className: "buttons" }, [
             element("button", { type: "submit", textContent: "Save" }),
             ...key_buttons,
@@ -34,7 +41,8 @@ function key_screen_render() {
         event.preventDefault();
         const key_new = key_input.value.trim();
         if (key_new === "") return;
-        SettingsStorage.key_set(key_new);
+        SettingsStorage.key_set(provider, key_new);
+        SettingsStorage.provider_set(provider);
         table_screen_render();
     };
     root.replaceChildren(form);
@@ -70,7 +78,13 @@ function history_download() {
     setTimeout(() => URL.revokeObjectURL(link.href), DOWNLOAD_URL_LIFETIME_MS);
 }
 
-const table = new Table(new TranslatorGemini(() => SettingsStorage.key_get() ?? ""), HistoryLocalStorage);
+// Each call goes to the provider chosen in "⚙" at that moment.
+const translators: Record<ProviderName, Translator> = {
+    gemini: new TranslatorGemini(() => SettingsStorage.key_get("gemini") ?? ""),
+    openai: new TranslatorOpenAI(() => SettingsStorage.key_get("openai") ?? ""),
+};
+const translator: Translator = { translate: (word, source_language) => translators[SettingsStorage.provider_get()].translate(word, source_language) };
+const table = new Table(translator, HistoryLocalStorage);
 let table_unsubscribe = () => {};
 
 // The network state comes from the browser; while offline nothing is sent.
@@ -122,7 +136,7 @@ function table_screen_render() {
             element("button", { type: "button", textContent: "Export", onclick: history_download }),
             element("button", { type: "button", textContent: "Import", onclick: () => import_input.click() }),
             import_input,
-            element("button", { className: "settings", textContent: "⚙", title: "Gemini API key", onclick: key_screen_render }),
+            element("button", { className: "settings", textContent: "⚙", title: "Provider and API key", onclick: () => key_screen_render() }),
         ]),
         element("table", { className: "table" }, [element("thead", {}, [header]), element("tbody", {}, [word_line, message_line]), entries]),
         undo_bar,
@@ -152,5 +166,5 @@ function table_screen_render() {
     state_render(table.state);
 }
 
-if (SettingsStorage.key_get()) table_screen_render();
+if (key_active_get()) table_screen_render();
 else key_screen_render();

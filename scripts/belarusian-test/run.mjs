@@ -1,6 +1,7 @@
 // Belarusian quality test: sends each Word through an LLM with the real prompt, writes a markdown report.
-// Usage: node run.mjs --list gemini|xai                          (list available models)
-//        node run.mjs gemini:<model_ID> | xai:<model_ID> [words_file]  (run the test; words_file defaults to words.json)
+// Usage: node run.mjs --list gemini|xai|openai                                  (list available models)
+//        node run.mjs gemini:<model_ID> | xai:<model_ID> | openai:<model_ID> [words_file]  (run the test; words_file defaults to words.json)
+// OpenAI reasoning effort: OPENAI_REASONING_EFFORT environment variable, default "none" as in the app (src/translator_openai.ts).
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -68,6 +69,25 @@ const PROVIDERS = {
             };
             const body = await json_fetch("https://api.x.ai/v1/chat/completions", {
                 method: "POST", headers: { authorization: `Bearer ${key_get("XAI_API_KEY")}`, "content-type": "application/json" }, body: JSON.stringify(request),
+            });
+            return body.choices?.[0]?.message?.content ?? "";
+        },
+    },
+    openai: {
+        delay_ms: 200, // Tier 1: 500 RPM
+        list: async () => {
+            const body = await json_fetch("https://api.openai.com/v1/models", { headers: { authorization: `Bearer ${key_get("OPENAI_API_KEY")}` } });
+            return body.data.map(m => m.id).sort();
+        },
+        translate: async (model, text) => {
+            const request = {
+                model,
+                reasoning_effort: process.env.OPENAI_REASONING_EFFORT ?? "none",
+                messages: [{ role: "developer", content: PROMPT_SYSTEM }, { role: "user", content: text }],
+                response_format: { type: "json_schema", json_schema: { name: "entry", strict: true, schema: { ...schema_build("boolean", "array", "string", "object"), additionalProperties: false } } },
+            };
+            const body = await json_fetch("https://api.openai.com/v1/chat/completions", {
+                method: "POST", headers: { authorization: `Bearer ${key_get("OPENAI_API_KEY")}`, "content-type": "application/json" }, body: JSON.stringify(request),
             });
             return body.choices?.[0]?.message?.content ?? "";
         },

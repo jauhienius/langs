@@ -46,8 +46,10 @@ function error_message(error: TranslatorError) {
         case "key_invalid": return "The API key was rejected – check it in ⚙";
         case "limit_minute": return `Limit per minute reached – try again in ${error.retry_seconds === null ? "a minute" : `${error.retry_seconds} s`}`;
         case "limit_day": return "Daily limit reached – try again tomorrow";
+        case "credit_empty": return "The API account has no credit left – add credit to it";
         case "busy": return "The translation service is busy – try again";
         case "network": return "Network error – check the connection and try again";
+        case "network_or_key": return "No answer – check the connection, and the API key in ⚙";
         case "response_bad": return "The answer had an unknown format – try again";
         case "request_rejected": return `The request was rejected (HTTP ${error.status}) – trying again will not help`;
     }

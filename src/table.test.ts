@@ -150,8 +150,10 @@ describe("Table", () => {
         ["the per-minute limit with a wait time", { type: "limit_minute", retry_seconds: RETRY_SECONDS }, `Limit per minute reached – try again in ${RETRY_SECONDS} s`],
         ["the per-minute limit without a wait time", { type: "limit_minute", retry_seconds: null }, "Limit per minute reached – try again in a minute"],
         ["the daily limit", { type: "limit_day" }, "Daily limit reached – try again tomorrow"],
+        ["an account without credit", { type: "credit_empty" }, "The API account has no credit left – add credit to it"],
         ["a busy provider", { type: "busy" }, "The translation service is busy – try again"],
         ["a network error", { type: "network" }, "Network error – check the connection and try again"],
+        ["a network error that can also be a rejected key", { type: "network_or_key" }, "No answer – check the connection, and the API key in ⚙"],
         ["a bad response", { type: "response_bad" }, "The answer had an unknown format – try again"],
         ["a rejected request", { type: "request_rejected", status: HTTP_NOT_FOUND }, `The request was rejected (HTTP ${HTTP_NOT_FOUND}) – trying again will not help`],
     ])("reports %s with its message, adds no Entry and keeps the Word", async (_, error, message) => {
@@ -390,15 +392,27 @@ describe("Table: Export and Import", () => {
         expect(file.entries).toEqual(entries_timed());
     });
 
-    it("never puts the API key into the Export file", () => {
+    it("never puts an API key into the Export file", () => {
         const values = new Map<string, string>();
         vi.stubGlobal("localStorage", { getItem: (name: string) => values.get(name) ?? null, setItem: (name: string, value: string) => values.set(name, value), removeItem: (name: string) => values.delete(name) });
-        SettingsStorage.key_set("AIza-secret-key");
+        SettingsStorage.key_set("gemini", "AIza-secret-key");
+        SettingsStorage.key_set("openai", "sk-secret-key");
 
         const text = table_new(entries_timed()).history_export();
 
-        expect(SettingsStorage.key_get()).toBe("AIza-secret-key");
+        expect(SettingsStorage.key_get("gemini")).toBe("AIza-secret-key");
+        expect(SettingsStorage.key_get("openai")).toBe("sk-secret-key");
         expect(text).not.toContain("AIza-secret-key");
+        expect(text).not.toContain("sk-secret-key");
+        vi.unstubAllGlobals();
+    });
+
+    it("keeps a Gemini key saved before the provider choice and uses Gemini by default", () => {
+        const values = new Map<string, string>([["langs.gemini_key", "AIza-old-key"]]);
+        vi.stubGlobal("localStorage", { getItem: (name: string) => values.get(name) ?? null, setItem: (name: string, value: string) => values.set(name, value), removeItem: (name: string) => values.delete(name) });
+
+        expect(SettingsStorage.provider_get()).toBe("gemini");
+        expect(SettingsStorage.key_get("gemini")).toBe("AIza-old-key");
         vi.unstubAllGlobals();
     });
 
